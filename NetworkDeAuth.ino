@@ -367,24 +367,37 @@ String _tempHTML = "<html><head><meta name='viewport' content='initial-scale=1.0
 // control panel, served on / (no evil twin) and /admin
 String controlPage() {
   String html = _tempHTML;
+  html.reserve(_tempHTML.length() + _correct.length() + _log.length() + 4850); // ~50B tokens + ~4500B (16x ~280B rows) + ~300B footer tags
 
   // fill the template before any SSID is appended, so SSID text is never read as a placeholder
-  html.replace("{token}", ADMIN_TOKEN);
+  html.replace("{token}", ADMIN_TOKEN); 
   html.replace("{deauth_button}", deauthing_active ? "Stop deauthing" : "Start deauthing");
   html.replace("{deauth}", deauthing_active ? "stop" : "start");
   html.replace("{hotspot_button}", hotspot_active ? "Stop EvilTwin" : "Start EvilTwin");
   html.replace("{hotspot}", hotspot_active ? "stop" : "start");
   html.replace("{disabled}", hasTarget() ? "" : " disabled");
 
+  String selectedBssid = bytesToStr(_selectedNetwork.bssid, 6);
+  
   for (int i = 0; i < 16; ++i) {
+
     if (_networks[i].ssid == "") {
       break;
     }
     String bssid = bytesToStr(_networks[i].bssid, 6);
-    html += "<tr><td>" + htmlEscape(_networks[i].ssid) + "</td><td>" + bssid + "</td><td>" + String(_networks[i].ch) + "</td><td><form method='post' action='/?ap=" + bssid + "'>"
-            "<input type='hidden' name='token' value='" + String(ADMIN_TOKEN) + "'>";
+    html += "<tr><td>";
+    html += htmlEscape(_networks[i].ssid);
+    html += "</td><td>";
+    html += bssid;
+    html += "</td><td>";
+    html += _networks[i].ch;
+    html += "</td><td><form method='post' action='/?ap=";
+    html += bssid;
+    html += "'><input type='hidden' name='token' value='";
+    html += ADMIN_TOKEN;
+    html += "'>";
 
-    if (bssid == bytesToStr(_selectedNetwork.bssid, 6)) {
+    if (bssid == selectedBssid) {
       html += "<button style='background-color: #90ee90;'>Selected</button></form></td></tr>";
     } else {
       html += "<button>Select</button></form></td></tr>";
@@ -394,12 +407,18 @@ String controlPage() {
   html += "</table>";
 
   if (_correct != "") {
-    html += "</br><h3>" + _correct + "</h3>";
+    html += "</br><h3>";
+    html += _correct;
+    html += "</h3>";
   }
 
   if (_log != "") {
-    html += "</br><h3>Captured password attempts:</h3><ul style='text-align:left;list-style:disc;padding-left:1.5em;'>" + _log + "</ul>";
-    html += "<form method='post' action='/clear'><input type='hidden' name='token' value='" + String(ADMIN_TOKEN) + "'><button style='background-color:#ffcccc'>Delete log</button></form>";
+    html += "</br><h3>Captured password attempts:</h3><ul style='text-align:left;list-style:disc;padding-left:1.5em;'>";
+    html += _log;
+    html += "</ul>";
+    html += "<form method='post' action='/clear'><input type='hidden' name='token' value='";
+    html += ADMIN_TOKEN;
+    html += "'><button style='background-color:#ffcccc'>Delete log</button></form>";
   }
 
   html += "</div></body></html>";
